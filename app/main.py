@@ -40,4 +40,4 @@ def list_users(db: Session = Depends(get_db)):
     return users
 
 # Create tables (after the app is initialized)
-models.Base.metadata.create_all(bind=engine)
+models.User.metadata.create_all(bind=engine)

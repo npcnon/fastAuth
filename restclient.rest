@@ -9,9 +9,10 @@ POST http://localhost:8000/auth/register
 Content-Type: application/json
 
 {
-  "username": "testuser",
-  "email": "testuser@example.com",
-  "password": "testpassword"
+  "username": "mod",
+  "email": "mod@example.com",
+  "password": "Qwerty123@",
+  "role": ["moderator"]
 }
 
 ###
@@ -21,6 +22,6 @@ POST http://localhost:8000/auth/login
 Content-Type: application/json
 
 {
-  "username": "testuser",
-  "password": "testpassword"
+  "username": "mod",
+  "password": "Qwerty123@"
 }

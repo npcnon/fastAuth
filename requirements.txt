@@ -10,3 +10,4 @@ alembic
 pydantic[email]
 pytz
 psutil
+ipython

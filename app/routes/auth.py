@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
-from app.models.user import User
-from app.schemas.user import UserCreate, UserLogin, UserRefresh
 from app.database import get_db
-from app.utils.security import create_access_token, get_password_hash, verify_password
-from jose import jwt, JWTError
+from app.schemas.user import UserCreate, UserLogin
+from app.crud.user import get_user_by_email_or_username, create_user, authenticate_user
+from app.utils.security import create_access_token
 import os
 from dotenv import load_dotenv
 
@@ -20,41 +19,43 @@ router = APIRouter(
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(user: UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter((User.username == user.username) | (User.email == user.email)).first()
+    # Check if user already exists
+    db_user = get_user_by_email_or_username(db, user.username, user.email)
     if db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists")
 
-    hashed_password = get_password_hash(user.password)
-    db_user = User(username=user.username, email=user.email, hashed_password=hashed_password)
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
+    # Create new user
+    return create_user(db, user.username, user.email, user.password, user.role)
 
-@router.post("/login", status_code=status.HTTP_200_OK)
-def login(user: UserLogin, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.username == user.username).first()
-    if not db_user or not verify_password(user.password, db_user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
+@router.post("/login")
+def login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
+    # Authenticate user
+    db_user = authenticate_user(db, user.username, user.password)
 
+    # Create tokens
     access_token = create_access_token(data={"sub": db_user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+    refresh_token = create_access_token(data={"sub": db_user.username})
 
-@router.post("/refresh", status_code=status.HTTP_200_OK)
-def refresh(refresh_token: UserRefresh, db: Session = Depends(get_db)):
-    try:
-        payload = jwt.decode(refresh_token.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        
-        if username is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+    # Set cookies
+    response.set_cookie(
+        key="access_token", 
+        value=access_token, 
+        httponly=True,  
+        secure=False,    
+        samesite="lax"
+    )
+    response.set_cookie(
+        key="refresh_token", 
+        value=refresh_token, 
+        httponly=True,
+        secure=False,
+        samesite="lax"
+    )
 
-        db_user = db.query(User).filter(User.username == username).first()
-        if db_user is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return {"message": "Login successful"}
 
-        access_token = create_access_token(data={"sub": db_user.username})
-        return {"access_token": access_token, "token_type": "bearer"}
-
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+@router.post("/logout")
+def logout(response: Response):
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")
+    return {"message": "Logged out successfully"}

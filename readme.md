@@ -27,3 +27,5 @@ alembic upgrade head
 
 # To stop the server from running cleanly, on the root folder, you can use
 python -m kill_unicorn
+
+# Requests examples are at restclient.rest file
