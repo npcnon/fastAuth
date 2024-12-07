@@ -59,3 +59,8 @@ def logout(response: Response):
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
     return {"message": "Logged out successfully"}
+
+#TODO: add blocklisting tokens, generate new ones
+#TODO: link users to employee
+#TODO: add api keys and segregate user log in route for different roles
+#TODO: last add a basic front end for managing users

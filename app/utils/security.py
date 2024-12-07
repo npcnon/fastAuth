@@ -4,6 +4,9 @@ from jose import jwt
 import pytz
 from dotenv import load_dotenv
 import os
+import uuid
+
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_WEEKS = 1
@@ -21,6 +24,10 @@ def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(pytz.UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
+
+    jti = str(uuid.uuid4()) + str(datetime.now(pytz.UTC))
+    to_encode.update({"jti": jti})
+
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -28,5 +35,10 @@ def create_refresh_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(pytz.UTC) + timedelta(weeks=REFRESH_TOKEN_EXPIRE_WEEKS)
     to_encode.update({"exp": expire})
+
+    jti = str(uuid.uuid4()) + str(datetime.now(pytz.UTC))
+    to_encode.update({"jti": jti})
+
+
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
