@@ -1,0 +1,26 @@
+# Test GET request
+GET http://localhost:8000/users
+Accept: application/json
+
+###
+
+# Test POST request for user registration
+POST http://localhost:8000/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "email": "testuser@example.com",
+  "password": "testpassword"
+}
+
+###
+
+# Test POST request for user login
+POST http://localhost:8000/auth/login
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "testpassword"
+}
