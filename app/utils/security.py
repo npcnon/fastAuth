@@ -10,7 +10,6 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_WEEKS = 1
@@ -121,7 +120,7 @@ def setup_rate_limiting(app: FastAPI):
         response = await call_next(request)
         return response
 
-
+#custom route limiter
 def apply_route_rate_limit(route_func):
     """
     Decorator to apply rate limiting to a specific route
@@ -149,3 +148,5 @@ def apply_route_rate_limit(route_func):
         return route_func(request)
     
     return wrapper
+
+

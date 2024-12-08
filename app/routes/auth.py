@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Response
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, status, Response
 import httpx
 from sqlalchemy.orm import Session
+from app.crud.api_keys import create_api_key, validate_api_key
 from app.database import get_db
 from app.models.user import UserRole
 from app.schemas.user import UserCreate, UserLogin
+from app.crud.jti import create_blocked_jti, get_hashed_jti
 from app.exceptions import DataMismatchException, BlockedAccessTokenException, BlockedRefreshTokenException
-from app.crud.user import get_user_by_email_or_username, create_user, authenticate_user, create_blocked_jti, get_hashed_jti
+from app.crud.user import get_user_by_email_or_username, create_user, authenticate_user
 from app.utils.security import create_access_token, create_refresh_token, decode_tokens
 import os
 from dotenv import load_dotenv
@@ -23,7 +25,15 @@ router = APIRouter(
 )
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(user: UserCreate, db: Session = Depends(get_db)):
+async def register(request: Request,user: UserCreate, db: Session = Depends(get_db)):
+    access_token = request.cookies.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=405, detail="only moderators can create api tokens")
+
+    decoded_access_token = decode_tokens(access_token)
+    if "mod" not in decoded_access_token or not decoded_access_token.get("mod"):
+        raise HTTPException(status_code=405, detail="only moderators can create api tokens")
+    
     db_user = get_user_by_email_or_username(db, user.username, user.email)
     if db_user:
         print(f"dbuser: {db_user}")
@@ -74,14 +84,28 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
         )
     
 @router.post("/grading-login")
-async def login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
+async def grading_login(request: Request,user: UserLogin, response: Response, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
+    if not validate_api_key(api_key=api_key, expected_service='grading', db=db):
+        raise HTTPException(
+            status_code=403, 
+            detail="Invalid or expired API Key for Grading Service"
+        )
+    
     db_user = authenticate_user(db, user.username, user.password)
     employee_details = await requests.fetch_public_employee_data(f"{CLIENT_API_URL}?", db_user.identifier)
     
     print(f"is it a professor/instructor? {any(role in employee_details.get("role", "") for role in ["Instructor", "Professor"])}")
-    if not any(role in employee_details.get("role", "") for role in ["Instructor", "Professor"]):
-        raise HTTPException(status_code=405, detail="Role must include either 'Instructor' or 'Professor'")
-
+    if not any(role in employee_details.get("role", "") for role in ["Instructor", "Professor","Admin","Registrar"]):
+        raise HTTPException(status_code=405, detail="Role must include either 'Instructor' ,'Professor', 'Admin', 'Registrar'")
+    
+    
+    access_token = request.cookies.get("access_token")
+    refresh_token = request.cookies.get("refresh_token")
+    if access_token:
+        response.delete_cookie("access_token")
+    if refresh_token:
+        response.delete_cookie("refresh_token")
+    
     # print(f"role: {employee_details["role"]}")
     access_token = create_access_token(data={
         "sub": db_user.username,
@@ -106,8 +130,143 @@ async def login(user: UserLogin, response: Response, db: Session = Depends(get_d
 
     return {"message": "Login successful"}
 
+
+@router.post("/scheduling-login")
+async def grading_login(request: Request,user: UserLogin, response: Response, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
+    if not validate_api_key(api_key=api_key, expected_service='scheduling', db=db):
+        raise HTTPException(
+            status_code=403, 
+            detail="Invalid or expired API Key for Scheduling Service"
+        )
+    
+    db_user = authenticate_user(db, user.username, user.password)
+    employee_details = await requests.fetch_public_employee_data(f"{CLIENT_API_URL}?", db_user.identifier)
+    
+    if not any(role in employee_details.get("role", "") for role in ["Dean","Admin",]):
+        raise HTTPException(status_code=405, detail="Role must include either 'Dean', 'Admin'")
+    
+    
+    access_token = request.cookies.get("access_token")
+    refresh_token = request.cookies.get("refresh_token")
+    if access_token:
+        response.delete_cookie("access_token")
+    if refresh_token:
+        response.delete_cookie("refresh_token")
+    
+    # print(f"role: {employee_details["role"]}")
+    access_token = create_access_token(data={
+        "sub": db_user.username,
+        "user_details": employee_details
+        })
+    refresh_token = create_refresh_token(data={"sub": db_user.username})
+    
+    response.set_cookie(
+        key="access_token", 
+        value=access_token, 
+        httponly=True,  
+        secure=False,    
+        samesite="lax"
+    )
+    response.set_cookie(
+        key="refresh_token", 
+        value=refresh_token, 
+        httponly=True,
+        secure=False,
+        samesite="lax"
+    )
+
+    return {"message": "Login successful"}
+
+@router.post("/portal-login")
+async def grading_login(request: Request,user: UserLogin, response: Response, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
+    if not validate_api_key(api_key=api_key, expected_service='portal', db=db):
+        raise HTTPException(
+            status_code=403, 
+            detail="Invalid or expired API Key for Portal Service"
+        )
+    
+    db_user = authenticate_user(db, user.username, user.password)
+    employee_details = await requests.fetch_public_employee_data(f"{CLIENT_API_URL}?", db_user.identifier)
+    
+    if "Registrar" not in employee_details.get("role", ""):
+        raise HTTPException(status_code=405, detail="Only registrar can log in")
+    
+    
+    access_token = request.cookies.get("access_token")
+    refresh_token = request.cookies.get("refresh_token")
+    if access_token:
+        response.delete_cookie("access_token")
+    if refresh_token:
+        response.delete_cookie("refresh_token")
+    
+    # print(f"role: {employee_details["role"]}")
+    access_token = create_access_token(data={
+        "sub": db_user.username,
+        "user_details": employee_details
+        })
+    refresh_token = create_refresh_token(data={"sub": db_user.username})
+    
+    response.set_cookie(
+        key="access_token", 
+        value=access_token, 
+        httponly=True,  
+        secure=False,    
+        samesite="lax"
+    )
+    response.set_cookie(
+        key="refresh_token", 
+        value=refresh_token, 
+        httponly=True,
+        secure=False,
+        samesite="lax"
+    )
+
+    return {"message": "Login successful"}
+
+
+
+
+@router.post("/mod-login")
+async def grading_login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
+
+    db_user = authenticate_user(db, user.username, user.password)
+    
+    if not user.username == "mod":
+        raise HTTPException(status_code=405, detail="only moderators can log in here")
+
+    # print(f"role: {employee_details["role"]}")
+    access_token = create_access_token(data={
+        "sub": db_user.username,
+        "mod": True,
+        })
+    refresh_token = create_refresh_token(data={"sub": db_user.username})
+    
+    response.set_cookie(
+        key="access_token", 
+        value=access_token, 
+        httponly=True,  
+        secure=False,    
+        samesite="lax"
+    )
+    response.set_cookie(
+        key="refresh_token", 
+        value=refresh_token, 
+        httponly=True,
+        secure=False,
+        samesite="lax"
+    )
+
+    return {"message": "Login successful"}
+
+
 @router.post("/mis-login")
-async def login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
+async def login(user: UserLogin, response: Response, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
+    if not validate_api_key(api_key=api_key, expected_service='mis', db=db):
+        raise HTTPException(
+            status_code=403, 
+            detail="Invalid or expired API Key for MIS Service"
+        )
+    
     db_user = authenticate_user(db, user.username, user.password)
     employee_details = await requests.fetch_public_employee_data(f"{CLIENT_API_URL}?", db_user.identifier)
     
@@ -154,28 +313,43 @@ async def verify_token(request: Request, response: Response, db: Session = Depen
         if db_access_jti:
             print(f"dbjti: {db_access_jti}")
             raise BlockedAccessTokenException()
+        db_user = get_user_by_email_or_username(db, decoded_access_token.get("sub"), "examplemod321as3agdbc3@examplemod.com")
+        employee_details = None
+        if db_user == None:
+            employee_details = await requests.fetch_public_employee_data(CLIENT_API_URL, decoded_access_token["user_details"].get("employee_id"))
 
-        employee_details = await requests.fetch_public_employee_data(CLIENT_API_URL, decoded_access_token["user_details"].get("employee_id"))
-
-        # print(f"decoded access token: {decoded_access_token["user_details"]}")
-        # print(f"employee details: {employee_details}")
-        if decoded_access_token["user_details"] != employee_details:
-            create_blocked_jti(db, decoded_access_token["jti"])
-            raise DataMismatchException()
+            # print(f"decoded access token: {decoded_access_token["user_details"]}")
+            # print(f"employee details: {employee_details}")
+            if decoded_access_token["user_details"] != employee_details:
+                create_blocked_jti(db, decoded_access_token["jti"])
+                raise DataMismatchException()
         return {"message": "Access token is valid"}
 
     except (jwt.ExpiredSignatureError, DataMismatchException) as e:
         try:
             decoded_refresh_token = decode_tokens(refresh_token)
-            db_refresh_jti = get_hashed_jti(decoded_refresh_token["jti"])
+            db_refresh_jti = get_hashed_jti(db, decoded_refresh_token["jti"])
             if db_refresh_jti:
                 print(f"dbjti: {db_refresh_jti}")
-                raise BlockedAccessTokenException()
+                raise BlockedRefreshTokenException()
 
+            if db_user == None:
+                new_access_token = create_access_token(data={
+                    "sub": decoded_access_token["sub"],
+                    "user_details": employee_details
+                    })
+                response.set_cookie(
+                    key="access_token",
+                    value=new_access_token,
+                    httponly=True,
+                    secure=False,
+                    samesite="lax"
+                )
+
+                return {"message": "Access token has expired, new access token has been generated"}
 
             new_access_token = create_access_token(data={
-                "sub": decoded_access_token["sub"],
-                "user_details": employee_details
+                "sub": decoded_access_token["sub"]
                 })
             response.set_cookie(
                 key="access_token",
@@ -184,9 +358,7 @@ async def verify_token(request: Request, response: Response, db: Session = Depen
                 secure=False,
                 samesite="lax"
             )
-
-            return {"message": "Access token has expired, new access token has been generated"}
-
+            
         except jwt.ExpiredSignatureError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -246,6 +418,34 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired tokens provided"
         )    
+
+
+@router.post("/create-api-key")
+def create_service_api_key(
+    request: Request,
+    service: str, 
+    db: Session = Depends(get_db),
+):
+    access_token = request.cookies.get("access_token")
+    refresh_token = request.cookies.get("refresh_token")
+    if not access_token or not refresh_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tokens not provided in the request")
+
+    decoded_access_token = decode_tokens(access_token)
+    print(f"is it a moderator?: {decoded_access_token["mod"]}")
+    if not decoded_access_token["mod"]:
+        raise HTTPException(status_code=405, detail="only moderators can create api tokens")
+
+    valid_services = ['grading', 'mis','scheduling','portal']
+    if service not in valid_services:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid service. Must be one of {valid_services}"
+        )
     
-#TODO: add api keys and segregate user log in route for different roles
+
+    api_key = create_api_key(db, service)
+    return {"api_key": api_key, "service": service}
+
+
 #TODO: last add a basic front end for managing users

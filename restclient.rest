@@ -9,10 +9,10 @@ POST http://localhost:8000/auth/register
 Content-Type: application/json
 
 {
-  "username": "yams",
-  "email": "yams12345@gmail.com",
-  "password": "Yams123@",
-  "identifier":"13"
+  "username": "gene",
+  "email": "gene12345@gmail.com",
+  "password": "Gene123@",
+  "identifier":"7"
 }
 
 ###
