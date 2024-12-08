@@ -9,19 +9,19 @@ POST http://localhost:8000/auth/register
 Content-Type: application/json
 
 {
-  "username": "mod",
-  "email": "mod@example.com",
-  "password": "Qwerty123@",
-  "role": ["moderator"]
+  "username": "yams",
+  "email": "yams12345@gmail.com",
+  "password": "Yams123@",
+  "identifier":"13"
 }
 
 ###
 
 # Test POST request for user login
-POST http://localhost:8000/auth/login
+POST http://localhost:8000/auth/prof-instructor-login
 Content-Type: application/json
 
 {
-  "username": "mod",
-  "password": "Qwerty123@"
+  "username": "yams",
+  "password": "Yams123@"
 }

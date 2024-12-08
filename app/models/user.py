@@ -5,12 +5,19 @@ import enum
 from app.database import Base
 
 class UserRole(enum.Enum):
-    USER = "student"
+    MODERATOR = "moderator" #sa atoa authsystem rani magamit
+
     ADMIN = "admin"
-    MODERATOR = "moderator"
+    SUPERADMIN = "superadmin"
+    MIS = "mis"
+    DATACENTER = "datacenter"
     PROFESSOR = "professor"
     INSTRUCTOR = "instructor"
     DEAN = "dean"
+    ACCOUNTING = "accounting"
+    REGISTRAR = "registrar"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -19,6 +26,7 @@ class User(Base):
     email = Column(String(225), unique=True, index=True, nullable=False)
     hashed_password = Column(String(225), nullable=False)
     role = Column(MySQLJSON, nullable=False)
+    identifier = identifier = Column(String(50), unique=True, index=True, nullable=False)
 
     @property
     def roles(self):

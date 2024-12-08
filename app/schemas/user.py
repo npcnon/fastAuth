@@ -7,16 +7,7 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
-    role: List[str] 
-
-    @field_validator('role')
-    @classmethod
-    def validate_roles(cls, v):
-        valid_roles = {role.value for role in UserRole}
-        for role in v:
-            if role not in valid_roles:
-                raise ValueError(f'Invalid role: {role}. Valid roles are: {valid_roles}')
-        return v
+    identifier: str
 
     @field_validator('username')
     @classmethod
@@ -49,5 +40,3 @@ class UserLogin(BaseModel):
     username: str
     password: str
 
-class UserRefresh(BaseModel):
-    refresh_token: str

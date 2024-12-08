@@ -25,7 +25,8 @@ alembic revision --autogenerate -m "Migration message here"
 # To apply the migrations to your database, run
 alembic upgrade head
 
-# To stop the server from running cleanly, on the root folder, you can use
-python -m kill_unicorn
+<!-- # To stop the server from running cleanly, on the root folder, you can use
+python -m kill_unicorn -->
+# Dont use kill_unicorn, still unstable
 
 # Requests examples are at restclient.rest file
