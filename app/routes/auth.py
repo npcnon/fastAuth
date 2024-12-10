@@ -450,13 +450,15 @@ def create_service_api_key(request: Request, service: str, db: Session = Depends
 
 @router.post("/change-password")
 def change_user_password(user: UserLogin, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
+    
     if not validate_api_key(api_key=api_key, expected_service='mod', db=db):
         raise HTTPException(
             status_code=403, 
             detail="Invalid or expired API Key for mod Service"
         )
-    change_password(db=db, username=user.username, new_password=user.password)
     
+    change_password(db=db, username=user.username, new_password=user.password)
 
+    return {"message": "Password changed successfully!"}
 
 #TODO: last add a basic front end for managing users
