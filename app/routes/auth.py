@@ -7,7 +7,7 @@ from app.models.user import UserRole
 from app.schemas.user import UserCreate, UserLogin
 from app.crud.jti import create_blocked_jti, get_hashed_jti
 from app.exceptions import DataMismatchException, BlockedAccessTokenException, BlockedRefreshTokenException
-from app.crud.user import get_user_by_email_or_username, create_user, authenticate_user
+from app.crud.user import change_password, get_user_by_email_or_username, create_user, authenticate_user
 from app.utils.security import create_access_token, create_refresh_token, decode_tokens
 import os
 from dotenv import load_dotenv
@@ -36,7 +36,7 @@ async def register(request: Request,user: UserCreate, db: Session = Depends(get_
     
     db_user = get_user_by_email_or_username(db, user.username, user.email)
     if db_user:
-        print(f"dbuser: {db_user}")
+        # print(f"dbuser: {db_user}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User already exists")
     
     try:
@@ -94,7 +94,7 @@ async def grading_login(request: Request,user: UserLogin, response: Response, db
     db_user = authenticate_user(db, user.username, user.password)
     employee_details = await requests.fetch_public_employee_data(f"{CLIENT_API_URL}?", db_user.identifier)
     
-    print(f"is it a professor/instructor? {any(role in employee_details.get("role", "") for role in ["Instructor", "Professor"])}")
+    # print(f"is it a professor/instructor? {any(role in employee_details.get("role", "") for role in ["Instructor", "Professor"])}")
     if not any(role in employee_details.get("role", "") for role in ["Instructor", "Professor","Admin","Registrar"]):
         raise HTTPException(status_code=405, detail="Role must include either 'Instructor' ,'Professor', 'Admin', 'Registrar'")
     
@@ -132,7 +132,7 @@ async def grading_login(request: Request,user: UserLogin, response: Response, db
 
 
 @router.post("/scheduling-login")
-async def grading_login(request: Request,user: UserLogin, response: Response, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
+async def scheduling_login(request: Request,user: UserLogin, response: Response, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
     if not validate_api_key(api_key=api_key, expected_service='scheduling', db=db):
         raise HTTPException(
             status_code=403, 
@@ -178,7 +178,7 @@ async def grading_login(request: Request,user: UserLogin, response: Response, db
     return {"message": "Login successful"}
 
 @router.post("/portal-login")
-async def grading_login(request: Request,user: UserLogin, response: Response, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
+async def portal_login(request: Request,user: UserLogin, response: Response, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
     if not validate_api_key(api_key=api_key, expected_service='portal', db=db):
         raise HTTPException(
             status_code=403, 
@@ -227,7 +227,12 @@ async def grading_login(request: Request,user: UserLogin, response: Response, db
 
 
 @router.post("/mod-login")
-async def grading_login(user: UserLogin, response: Response, db: Session = Depends(get_db)):
+async def mod_login(user: UserLogin, response: Response, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
+    if not validate_api_key(api_key=api_key, expected_service='mod', db=db):
+        raise HTTPException(
+            status_code=403, 
+            detail="Invalid or expired API Key for Mod Service"
+        )
 
     db_user = authenticate_user(db, user.username, user.password)
     
@@ -260,7 +265,7 @@ async def grading_login(user: UserLogin, response: Response, db: Session = Depen
 
 
 @router.post("/mis-login")
-async def login(user: UserLogin, response: Response, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
+async def mis_login(user: UserLogin, response: Response, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
     if not validate_api_key(api_key=api_key, expected_service='mis', db=db):
         raise HTTPException(
             status_code=403, 
@@ -270,7 +275,7 @@ async def login(user: UserLogin, response: Response, db: Session = Depends(get_d
     db_user = authenticate_user(db, user.username, user.password)
     employee_details = await requests.fetch_public_employee_data(f"{CLIENT_API_URL}?", db_user.identifier)
     
-    print(f"is it a professor/instructor? {any(role in employee_details.get("role", "") for role in ["Instructor", "Professor"])}")
+    # print(f"is it a professor/instructor? {any(role in employee_details.get("role", "") for role in ["Instructor", "Professor"])}")
     if "moderator" in employee_details.get("role", ""):
         raise HTTPException(status_code=405, detail="you cannot log in the moderator here")
 
@@ -311,7 +316,7 @@ async def verify_token(request: Request, response: Response, db: Session = Depen
         decoded_access_token = decode_tokens(access_token)
         db_access_jti = get_hashed_jti(db, decoded_access_token["jti"])
         if db_access_jti:
-            print(f"dbjti: {db_access_jti}")
+            # print(f"dbjti: {db_access_jti}")
             raise BlockedAccessTokenException()
         db_user = get_user_by_email_or_username(db, decoded_access_token.get("sub"), "examplemod321as3agdbc3@examplemod.com")
         employee_details = None
@@ -330,7 +335,7 @@ async def verify_token(request: Request, response: Response, db: Session = Depen
             decoded_refresh_token = decode_tokens(refresh_token)
             db_refresh_jti = get_hashed_jti(db, decoded_refresh_token["jti"])
             if db_refresh_jti:
-                print(f"dbjti: {db_refresh_jti}")
+                # print(f"dbjti: {db_refresh_jti}")
                 raise BlockedRefreshTokenException()
 
             if db_user == None:
@@ -366,7 +371,7 @@ async def verify_token(request: Request, response: Response, db: Session = Depen
             )
 
     except Exception as e:
-        print(f"exception error: {e}")
+        # print(f"exception error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Invalid token"
@@ -421,22 +426,18 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 
 
 @router.post("/create-api-key")
-def create_service_api_key(
-    request: Request,
-    service: str, 
-    db: Session = Depends(get_db),
-):
+def create_service_api_key(request: Request, service: str, db: Session = Depends(get_db)):
     access_token = request.cookies.get("access_token")
     refresh_token = request.cookies.get("refresh_token")
     if not access_token or not refresh_token:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tokens not provided in the request")
 
     decoded_access_token = decode_tokens(access_token)
-    print(f"is it a moderator?: {decoded_access_token["mod"]}")
+    # print(f"is it a moderator?: {decoded_access_token["mod"]}")
     if not decoded_access_token["mod"]:
         raise HTTPException(status_code=405, detail="only moderators can create api tokens")
 
-    valid_services = ['grading', 'mis','scheduling','portal']
+    valid_services = ['grading', 'mis','scheduling','portal', 'mod']
     if service not in valid_services:
         raise HTTPException(
             status_code=400, 
@@ -446,6 +447,16 @@ def create_service_api_key(
 
     api_key = create_api_key(db, service)
     return {"api_key": api_key, "service": service}
+
+@router.post("/change-password")
+def change_user_password(user: UserLogin, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
+    if not validate_api_key(api_key=api_key, expected_service='mod', db=db):
+        raise HTTPException(
+            status_code=403, 
+            detail="Invalid or expired API Key for mod Service"
+        )
+    change_password(db=db, username=user.username, new_password=user.password)
+    
 
 
 #TODO: last add a basic front end for managing users

@@ -25,3 +25,11 @@ def authenticate_user(db: Session, username: str, password: str):
         )
     return db_user
 
+def change_password(db: Session, username: str, new_password: str):
+    db_user = db.query(User).filter(User.username == username).first()
+    hashed_new_password = get_password_hash(new_password)
+
+    db_user.hashed_password = hashed_new_password
+    db.commit()
+    db.refresh(db_user)
+    return db_user

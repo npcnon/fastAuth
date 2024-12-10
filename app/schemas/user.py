@@ -39,6 +39,3 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
-
-class CreateAPIKey(BaseModel):
-    service: str
