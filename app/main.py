@@ -17,7 +17,7 @@ setup_rate_limiting(app)
 
 origins = [
     "http://localhost:3000",  
-    "https://yourfrontend.com",  
+    "https://auth-front-iota.vercel.app",  
 ]
 
 
