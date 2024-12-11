@@ -1,19 +1,19 @@
 import os
+from urllib.parse import quote_plus
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
-from alembic.config import Config
 
 # Load environment variables
 load_dotenv()
 
-# Get DATABASE_URL from environment variables
-DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://root@localhost/fastauth")
+# Encode username and password separately
+encoded_username = quote_plus(os.getenv('DB_USERNAME'))
+encoded_password = quote_plus(os.getenv('DB_PASSWORD'))
 
-# Create Alembic configuration
-alembic_config = Config("alembic.ini")
-alembic_config.set_main_option('sqlalchemy.url', DATABASE_URL)
+# Construct DATABASE_URL with properly encoded components
+DATABASE_URL = f'mysql+pymysql://{encoded_username}:{encoded_password}@{os.getenv("DB_HOST")}/{os.getenv("DB_NAME")}'
 
 # Create SQLAlchemy engine
 engine = create_engine(

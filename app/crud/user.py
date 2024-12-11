@@ -33,3 +33,6 @@ def change_password(db: Session, username: str, new_password: str):
     db.commit()
     db.refresh(db_user)
     return db_user
+
+def get_all_users(db: Session):
+    return db.query(User).filter(User.username != 'mod').all()

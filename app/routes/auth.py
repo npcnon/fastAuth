@@ -1,18 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Request, status, Response
+from urllib.parse import urlparse
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request, status, Response
 import httpx
 from sqlalchemy.orm import Session
 from app.crud.api_keys import create_api_key, validate_api_key
 from app.database import get_db
 from app.models.user import UserRole
-from app.schemas.user import UserCreate, UserLogin
+from app.schemas.user import UserCreate, UserLogin, UserResponse
 from app.crud.jti import create_blocked_jti, get_hashed_jti
 from app.exceptions import DataMismatchException, BlockedAccessTokenException, BlockedRefreshTokenException
-from app.crud.user import change_password, get_user_by_email_or_username, create_user, authenticate_user
+from app.crud.user import change_password, get_all_users, get_user_by_email_or_username, create_user, authenticate_user
 from app.utils.security import create_access_token, create_refresh_token, decode_tokens
 import os
 from dotenv import load_dotenv
 from app.utils import requests
 from jose import jwt
+from typing import List
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -117,15 +119,15 @@ async def grading_login(request: Request,user: UserLogin, response: Response, db
         key="access_token", 
         value=access_token, 
         httponly=True,  
-        secure=False,    
-        samesite="lax"
+        secure=True,    
+        samesite="None"
     )
     response.set_cookie(
         key="refresh_token", 
         value=refresh_token, 
         httponly=True,
-        secure=False,
-        samesite="lax"
+        secure=True,
+        samesite="None"
     )
 
     return {"message": "Login successful"}
@@ -164,15 +166,15 @@ async def scheduling_login(request: Request,user: UserLogin, response: Response,
         key="access_token", 
         value=access_token, 
         httponly=True,  
-        secure=False,    
-        samesite="lax"
+        secure=True,    
+        samesite="None"
     )
     response.set_cookie(
         key="refresh_token", 
         value=refresh_token, 
         httponly=True,
-        secure=False,
-        samesite="lax"
+        secure=True,
+        samesite="None"
     )
 
     return {"message": "Login successful"}
@@ -210,15 +212,15 @@ async def portal_login(request: Request,user: UserLogin, response: Response, db:
         key="access_token", 
         value=access_token, 
         httponly=True,  
-        secure=False,    
-        samesite="lax"
+        secure=True,    
+        samesite="None"
     )
     response.set_cookie(
         key="refresh_token", 
         value=refresh_token, 
         httponly=True,
-        secure=False,
-        samesite="lax"
+        secure=True,
+        samesite="None"
     )
 
     return {"message": "Login successful"}
@@ -250,15 +252,15 @@ async def mod_login(user: UserLogin, response: Response, db: Session = Depends(g
         key="access_token", 
         value=access_token, 
         httponly=True,  
-        secure=False,    
-        samesite="lax"
+        secure=True,    
+        samesite="None"
     )
     response.set_cookie(
         key="refresh_token", 
         value=refresh_token, 
         httponly=True,
-        secure=False,
-        samesite="lax"
+        secure=True,
+        samesite="None"
     )
 
     return {"message": "Login successful"}
@@ -290,15 +292,15 @@ async def mis_login(user: UserLogin, response: Response, db: Session = Depends(g
         key="access_token", 
         value=access_token, 
         httponly=True,  
-        secure=False,    
-        samesite="lax"
+        secure=True,    
+        samesite="None"
     )
     response.set_cookie(
         key="refresh_token", 
         value=refresh_token, 
         httponly=True,
-        secure=False,
-        samesite="lax"
+        secure=True,
+        samesite="None"
     )
 
     return {"message": "Login successful"}
@@ -313,63 +315,66 @@ async def verify_token(request: Request, response: Response, db: Session = Depen
         
         if not access_token or not refresh_token:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tokens not provided in the request")
-        decoded_access_token = decode_tokens(access_token)
-        db_access_jti = get_hashed_jti(db, decoded_access_token["jti"])
-        if db_access_jti:
-            # print(f"dbjti: {db_access_jti}")
-            raise BlockedAccessTokenException()
-        db_user = get_user_by_email_or_username(db, decoded_access_token.get("sub"), "examplemod321as3agdbc3@examplemod.com")
-        employee_details = None
-        if db_user == None:
-            employee_details = await requests.fetch_public_employee_data(CLIENT_API_URL, decoded_access_token["user_details"].get("employee_id"))
-
-            # print(f"decoded access token: {decoded_access_token["user_details"]}")
-            # print(f"employee details: {employee_details}")
-            if decoded_access_token["user_details"] != employee_details:
-                create_blocked_jti(db, decoded_access_token["jti"])
-                raise DataMismatchException()
-        return {"message": "Access token is valid"}
-
-    except (jwt.ExpiredSignatureError, DataMismatchException) as e:
+        
+        decoded_access_token_details = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
+        
         try:
+            decoded_access_token = decode_tokens(access_token)
+            
+            db_access_jti = get_hashed_jti(db, decoded_access_token["jti"])
+            if db_access_jti:
+                # print(f"dbjti: {db_access_jti}")
+                raise BlockedAccessTokenException()
+            
+            employee_details = None
+            if not decoded_access_token.get("mod"):
+                employee_details = await requests.fetch_public_employee_data(CLIENT_API_URL, decoded_access_token["user_details"].get("employee_id"))
+
+                # print(f"decoded access token: {decoded_access_token["user_details"]}")
+                # print(f"employee details: {employee_details}")
+                if decoded_access_token["user_details"] != employee_details:
+                    create_blocked_jti(db, decoded_access_token["jti"])
+                    raise DataMismatchException()
+            
+            return {"message": "Access token is valid"}
+        
+        except jwt.ExpiredSignatureError:
             decoded_refresh_token = decode_tokens(refresh_token)
+            
             db_refresh_jti = get_hashed_jti(db, decoded_refresh_token["jti"])
             if db_refresh_jti:
                 # print(f"dbjti: {db_refresh_jti}")
                 raise BlockedRefreshTokenException()
 
-            if db_user == None:
+            if not decoded_access_token_details.get("mod", False):
+                employee_details = await requests.fetch_public_employee_data(CLIENT_API_URL, decoded_access_token_details["user_details"].get("employee_id"))
+                
                 new_access_token = create_access_token(data={
-                    "sub": decoded_access_token["sub"],
+                    "sub": decoded_refresh_token["sub"],
                     "user_details": employee_details
-                    })
-                response.set_cookie(
-                    key="access_token",
-                    value=new_access_token,
-                    httponly=True,
-                    secure=False,
-                    samesite="lax"
-                )
-
-                return {"message": "Access token has expired, new access token has been generated"}
-
-            new_access_token = create_access_token(data={
-                "sub": decoded_access_token["sub"]
                 })
+            else:
+                new_access_token = create_access_token(data={
+                    "sub": decoded_refresh_token["sub"],
+                    "mod": True
+                })
+            
             response.set_cookie(
                 key="access_token",
                 value=new_access_token,
                 httponly=True,
-                secure=False,
-                samesite="lax"
+                secure=True,
+                samesite="None"
             )
             
-        except jwt.ExpiredSignatureError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh token has expired, please log in again"
-            )
-
+            return {"message": "Access token has expired, new access token has been generated"}
+    
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has expired, please log in again"
+        )
+    
     except Exception as e:
         # print(f"exception error: {e}")
         raise HTTPException(
@@ -461,4 +466,60 @@ def change_user_password(user: UserLogin, db: Session = Depends(get_db), api_key
 
     return {"message": "Password changed successfully!"}
 
-#TODO: last add a basic front end for managing users
+
+@router.get("/users", response_model=List[UserResponse])
+def view_all_users( request: Request,db: Session = Depends(get_db)):
+    access_token = request.cookies.get("access_token")
+    refresh_token = request.cookies.get("refresh_token")
+    if not access_token or not refresh_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tokens not provided in the request")
+
+    decoded_access_token = decode_tokens(access_token)
+    # print(f"is it a moderator?: {decoded_access_token["mod"]}")
+    if not decoded_access_token.get("mod"):
+        raise HTTPException(status_code=405, detail="only moderators can view all the users")
+
+    users = get_all_users(db)
+    return users
+
+@router.get("/proxy")
+async def proxy_get_request(
+    request: Request, 
+    url: str = Query(..., description="Full URL to proxy"),
+    api_key: str = Header(alias="X-API-Key"), 
+    db: Session = Depends(get_db)
+):
+    if not validate_api_key(api_key=api_key, expected_service='mod', db=db):
+        raise HTTPException(
+            status_code=403, 
+            detail="Invalid or expired API Key"
+        )
+    
+    allowed_domains = [
+        "node-mysql-signup-verification-api.onrender.com"
+    ]
+    
+    parsed_url = urlparse(url)
+    if parsed_url.netloc not in allowed_domains:
+        raise HTTPException(
+            status_code=403, 
+            detail="Access to this domain is not allowed"
+        )
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=request.query_params)
+            
+            response.raise_for_status()
+            return response.json()
+    
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code, 
+            detail=f"External API error: {str(e)}"
+        )
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, 
+            detail=f"Failed to connect to external API: {str(e)}"
+        )
