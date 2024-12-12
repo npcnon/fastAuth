@@ -48,11 +48,10 @@ def create_refresh_token(data: dict):
 
 def decode_tokens(token: str):
     try:
-        # Decode the token
         decoded_token = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        
-        # Check if token is expired
+
         if datetime.fromtimestamp(decoded_token["exp"], tz=pytz.UTC) < datetime.now(pytz.UTC):
+            print(f"token details: {decoded_token}") 
             raise jwt.ExpiredSignatureError
         
         return decoded_token
@@ -64,7 +63,6 @@ def decode_tokens(token: str):
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Invalid token"
         )
-    
 
 
 # Create a rate limiter with more flexible configuration

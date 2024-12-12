@@ -130,7 +130,10 @@ async def grading_login(request: Request,user: UserLogin, response: Response, db
         samesite="None"
     )
 
-    return {"message": "Login successful"}
+    return {"message": "Login successful",
+            "sub": db_user.username,
+            "user_details": employee_details
+            }
 
 
 @router.post("/scheduling-login")
@@ -177,7 +180,10 @@ async def scheduling_login(request: Request,user: UserLogin, response: Response,
         samesite="None"
     )
 
-    return {"message": "Login successful"}
+    return {"message": "Login successful",
+            "sub": db_user.username,
+            "user_details": employee_details
+            }
 
 @router.post("/portal-login")
 async def portal_login(request: Request,user: UserLogin, response: Response, db: Session = Depends(get_db), api_key: str = Header(alias="X-API-Key")):
@@ -223,7 +229,10 @@ async def portal_login(request: Request,user: UserLogin, response: Response, db:
         samesite="None"
     )
 
-    return {"message": "Login successful"}
+    return {"message": "Login successful",
+            "sub": db_user.username,
+            "user_details": employee_details
+            }
 
 
 
@@ -263,7 +272,10 @@ async def mod_login(user: UserLogin, response: Response, db: Session = Depends(g
         samesite="None"
     )
 
-    return {"message": "Login successful"}
+    return {"message": "Login successful",
+            "sub": db_user.username,
+            "mod": True,            
+            }
 
 
 @router.post("/mis-login")
@@ -303,7 +315,10 @@ async def mis_login(user: UserLogin, response: Response, db: Session = Depends(g
         samesite="None"
     )
 
-    return {"message": "Login successful"}
+    return {"message": "Login successful",
+            "sub": db_user.username,
+            "user_details": employee_details
+            }
 
 
 
@@ -313,14 +328,14 @@ async def verify_token(request: Request, response: Response, db: Session = Depen
         access_token = request.cookies.get("access_token")
         refresh_token = request.cookies.get("refresh_token")
         
+        decoded_refresh_token = decode_tokens(refresh_token)
+
         if not access_token or not refresh_token:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tokens not provided in the request")
         
         decoded_access_token_details = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
-        
         try:
             decoded_access_token = decode_tokens(access_token)
-            
             db_access_jti = get_hashed_jti(db, decoded_access_token["jti"])
             if db_access_jti:
                 # print(f"dbjti: {db_access_jti}")
@@ -336,10 +351,18 @@ async def verify_token(request: Request, response: Response, db: Session = Depen
                     create_blocked_jti(db, decoded_access_token["jti"])
                     raise DataMismatchException()
             
-            return {"message": "Access token is valid"}
+                return {"message": "Access token is valid",                    
+                        "sub": decoded_access_token["sub"],
+                        "user_details": decoded_access_token["user_details"]
+                        }
+            
+            return {"message": "Access token is valid",                    
+                "sub": decoded_access_token["sub"],
+                "mod": True
+                }
+
         
-        except jwt.ExpiredSignatureError:
-            decoded_refresh_token = decode_tokens(refresh_token)
+        except (jwt.ExpiredSignatureError, DataMismatchException):
             
             db_refresh_jti = get_hashed_jti(db, decoded_refresh_token["jti"])
             if db_refresh_jti:
@@ -366,17 +389,26 @@ async def verify_token(request: Request, response: Response, db: Session = Depen
                 secure=True,
                 samesite="None"
             )
-            
-            return {"message": "Access token has expired, new access token has been generated"}
-    
-    except jwt.ExpiredSignatureError:
+            if not decoded_access_token_details.get("mod", False):
+                return {"message": "Access token has expired, new access token has been generated",
+                            "sub": decoded_access_token_details["sub"],
+                            "user_details": employee_details
+                        }
+            else:
+                return {"message": "Access token has expired, new access token has been generated",
+                            "sub": decoded_access_token_details["sub"],
+                            "mod": True
+                        }
+
+    except jwt.ExpiredSignatureError as e:
+        print(f"exception error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token has expired, please log in again"
         )
     
     except Exception as e:
-        # print(f"exception error: {e}")
+        print(f"exception error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Invalid token"
