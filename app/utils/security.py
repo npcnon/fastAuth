@@ -88,7 +88,7 @@ def setup_rate_limiting(app: FastAPI):
     async def login_rate_limit(request: Request):
         return request
     
-    @limiter.limit("20/minute")
+    @limiter.limit("100/minute")
     async def token_verify_rate_limit(request: Request):
         return request
     

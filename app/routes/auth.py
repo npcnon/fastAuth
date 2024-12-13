@@ -288,10 +288,12 @@ async def mis_login(user: UserLogin, response: Response, db: Session = Depends(g
     
     db_user = authenticate_user(db, user.username, user.password)
     employee_details = await requests.fetch_public_employee_data(f"{CLIENT_API_URL}?", db_user.identifier)
-    
+    if not any(role in employee_details.get("role", "") for role in ["Registrar","MIS",'Accounting']):
+        raise HTTPException(status_code=405, detail="Role must include either 'Registrar', 'MIS', 'Accounting")
+
     # print(f"is it a professor/instructor? {any(role in employee_details.get("role", "") for role in ["Instructor", "Professor"])}")
-    if "moderator" in employee_details.get("role", ""):
-        raise HTTPException(status_code=405, detail="you cannot log in the moderator here")
+    # if "moderator" in employee_details.get("role", ""):
+    #     raise HTTPException(status_code=405, detail="you cannot log in the moderator here")
 
     # print(f"role: {employee_details["role"]}")
     access_token = create_access_token(data={
