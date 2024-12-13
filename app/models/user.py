@@ -5,8 +5,7 @@ import enum
 from app.database import Base
 
 class UserRole(enum.Enum):
-    MODERATOR = "moderator" #sa atoa authsystem rani magamit
-
+    MODERATOR = "moderator"
     ADMIN = "admin"
     SUPERADMIN = "superadmin"
     MIS = "mis"

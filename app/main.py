@@ -9,9 +9,9 @@ from .routes.auth import router as auth_router
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="My FastAPI Project",
-    description="A sample FastAPI project with MariaDB",
-    version="0.1.0"
+    title="AUTHENTICATION SYSTEM",
+    description="A FastAPI Authentication project\n\n[Link to Google Docs for comprehensive guide](https://docs.google.com/document/d/1mUjlJzCd1Aa-_ZclxMSAZs9OOFstESWh8aSwRLmEAIs/edit?tab=t.6bncxdjw1hly)",
+    version="1.2.0"
 )
 setup_rate_limiting(app)
 
